@@ -38,7 +38,7 @@ function saveState() {
 async function getLatestDrop() {
   const response = await fetch(DROP_API_URL, {
     headers: { Accept: "application/json" },
-    signal: AbortSignal.timeout(15000)
+    signal: AbortSignal.timeout(90000)
   });
   if (!response.ok) throw new Error(`Drop API returned HTTP ${response.status}`);
   const drops = await response.json();
