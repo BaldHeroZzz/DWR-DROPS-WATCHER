@@ -1,7 +1,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 
-const DROP_API_URL = process.env.DROP_API_URL || "https://dqr-drops.onrender.com/api/drops";
+const DROP_API_URL = process.env.DROP_API_URL || "https://baldhero-loots.onrender.com/api/drops";
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 const INACTIVITY_MINUTES = Math.max(1, Number(process.env.INACTIVITY_MINUTES || 10));
@@ -15,11 +15,7 @@ if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
 }
 
 const INACTIVITY_MS = INACTIVITY_MINUTES * 60 * 1000;
-let state = {
-  latestDropId: null,
-  lastDropAt: null,
-  alertedDropId: null
-};
+let state = { latestDropId: null, lastDropAt: null, alertedDropId: null };
 let checking = false;
 
 function loadState() {
@@ -28,9 +24,7 @@ function loadState() {
     const saved = JSON.parse(fs.readFileSync(STATE_FILE, "utf8"));
     state = { ...state, ...saved };
   } catch (error) {
-    if (error.code !== "ENOENT") {
-      console.error("Could not read saved state; starting with fresh state:", error.message);
-    }
+    if (error.code !== "ENOENT") console.error("Could not read saved state:", error.message);
   }
 }
 
@@ -43,25 +37,20 @@ function saveState() {
 
 async function getLatestDrop() {
   const response = await fetch(DROP_API_URL, {
-    headers: { "Accept": "application/json" },
+    headers: { Accept: "application/json" },
     signal: AbortSignal.timeout(15000)
   });
   if (!response.ok) throw new Error(`Drop API returned HTTP ${response.status}`);
   const drops = await response.json();
-  if (!Array.isArray(drops)) throw new Error("Drop API response was not an array");
+  if (!Array.isArray(drops)) throw new Error("BaldHero Drops API response was not an array");
   return drops[0] || null;
 }
 
-async function sendTelegramMessage(text) {
-  const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
-  const response = await fetch(url, {
+async function sendTelegramMessage(message) {
+  const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      chat_id: TELEGRAM_CHAT_ID,
-      text,
-      disable_web_page_preview: true
-    }),
+    body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: message, disable_web_page_preview: true }),
     signal: AbortSignal.timeout(15000)
   });
   const result = await response.json();
@@ -71,12 +60,20 @@ async function sendTelegramMessage(text) {
 }
 
 function dropIdentifier(drop) {
-  return String(drop.id || `${drop.createdAt || ""}|${drop.item || ""}|${drop.player || ""}`);
+  return String(drop.id || `${drop.timestamp || ""}|${drop.author || ""}|${drop.dungeon || ""}`);
 }
 
-function formatDuration(milliseconds) {
-  const minutes = Math.floor(milliseconds / 60000);
-  return `${minutes} minute${minutes === 1 ? "" : "s"}`;
+function describeDrop(drop) {
+  const items = Array.isArray(drop.items) ? drop.items : [];
+  const itemLines = items.length
+    ? items.map(item => `• ${item.name || "Unknown item"} — ${item.rarity || "Unknown rarity"} ×${item.quantity || 1}`).join("\n")
+    : "No item details";
+  return [
+    drop.dungeon ? `Dungeon: ${drop.dungeon}` : null,
+    drop.boss ? `Boss: ${drop.boss}` : null,
+    `Player: ${drop.author || "Unknown player"}`,
+    itemLines
+  ].filter(Boolean).join("\n");
 }
 
 async function checkForInactivity() {
@@ -85,14 +82,14 @@ async function checkForInactivity() {
   try {
     const latest = await getLatestDrop();
     if (!latest) {
-      console.log("No drops have been recorded yet; waiting for the first drop.");
+      console.log("BaldHero Drops has no records yet.");
       return;
     }
 
     const latestId = dropIdentifier(latest);
-    const latestAt = Date.parse(latest.createdAt);
+    const latestAt = Date.parse(latest.timestamp);
     if (!Number.isFinite(latestAt)) {
-      console.warn("Latest drop has no valid createdAt timestamp; skipping this check.");
+      console.warn("Latest BaldHero drop has no valid timestamp; skipping this check.");
       return;
     }
 
@@ -101,24 +98,24 @@ async function checkForInactivity() {
       state.lastDropAt = new Date(latestAt).toISOString();
       state.alertedDropId = null;
       saveState();
-      console.log(`New latest drop detected: ${latest.item || "Unknown item"} at ${state.lastDropAt}`);
+      console.log(`New BaldHero drop detected: ${latest.dungeon || "Dungeon Quest"} at ${state.lastDropAt}`);
     } else if (!state.lastDropAt) {
       state.lastDropAt = new Date(latestAt).toISOString();
       saveState();
     }
 
     const lastDropTime = Date.parse(state.lastDropAt);
+    if (!Number.isFinite(lastDropTime)) throw new Error("Saved lastDropAt timestamp is invalid.");
     const quietFor = Date.now() - lastDropTime;
     if (quietFor < INACTIVITY_MS || state.alertedDropId === latestId) return;
 
     const message = [
-      "⏰ DQR DROP INACTIVITY ALERT",
+      "⏰ BALDHERO DROPS INACTIVITY ALERT",
       `No new drops have been detected for at least ${INACTIVITY_MINUTES} minutes.`,
-      `Last drop: ${latest.item || "Unknown item"}`,
-      `Player: ${latest.player || "Unknown player"}`,
-      `Last detected: ${new Date(lastDropTime).toLocaleString("en-PH", { timeZone: "Asia/Manila" })} (Philippine time)`,
-      `Quiet period: ${formatDuration(quietFor)}`
-    ].join("\n");
+      describeDrop(latest),
+      `Last drop: ${new Date(lastDropTime).toLocaleString("en-PH", { timeZone: "Asia/Manila" })} (Philippine time)`,
+      `Quiet period: ${Math.floor(quietFor / 60000)} minutes`
+    ].join("\n\n");
 
     await sendTelegramMessage(message);
     state.alertedDropId = latestId;
@@ -132,7 +129,7 @@ async function checkForInactivity() {
 }
 
 loadState();
-console.log("DQR Drop Watcher starting.");
+console.log("BaldHero Drops Watcher starting.");
 console.log(`Drop feed: ${DROP_API_URL}`);
 console.log(`Inactivity threshold: ${INACTIVITY_MINUTES} minutes`);
 console.log(`Poll interval: ${POLL_INTERVAL_SECONDS} seconds`);
