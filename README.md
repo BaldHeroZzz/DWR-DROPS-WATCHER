@@ -24,7 +24,7 @@ Each new drop message contains only the item list—no boss-defeated, boss, dung
 | Common / Normal | ⚪ |
 | Unknown rarity | ⚪ |
 
-Each line uses this format: `[rarity dot] x[quantity] [item name]`. Telegram HTML formatting bolds Ultimate and Legendary lines.
+Each new-drop message also includes the drop date and time in 12-hour format (AM/PM), using Philippine Time (PHT). Each item line uses this format: `[rarity dot] x[quantity] [item name]`. Telegram HTML formatting bolds Ultimate and Legendary lines.
 
 If multiple drops arrive between checks, the watcher sends the unseen drops in chronological order, provided the previous saved drop is still present in the feed. If it is no longer present, it sends the latest drop rather than replaying the entire feed.
 
