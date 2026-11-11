@@ -12,7 +12,7 @@ GitHub scheduled workflows can be delayed during periods of high load, so new-dr
 
 ### Drop notification format
 
-Each new drop message contains only the item list—no boss, dungeon, or player details. The dot color is based on the item's `rarity` field:
+Each new drop message contains only the item list—no boss-defeated, boss, dungeon, or player details. Ultimate and Legendary items appear first under **HIGH VALUE DROPS**, with their item lines bolded. All remaining items appear under **OTHER DROPS**. The dot color is based on the item's `rarity` field:
 
 | Rarity | Dot |
 | --- | --- |
@@ -24,7 +24,7 @@ Each new drop message contains only the item list—no boss, dungeon, or player 
 | Common / Normal | ⚪ |
 | Unknown rarity | ⚪ |
 
-Each line uses this format: `[rarity dot] x[quantity] [item name]`.
+Each line uses this format: `[rarity dot] x[quantity] [item name]`. Telegram HTML formatting bolds Ultimate and Legendary lines.
 
 If multiple drops arrive between checks, the watcher sends the unseen drops in chronological order, provided the previous saved drop is still present in the feed. If it is no longer present, it sends the latest drop rather than replaying the entire feed.
 
