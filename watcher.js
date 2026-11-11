@@ -50,7 +50,7 @@ async function sendTelegramMessage(message) {
   const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: message, disable_web_page_preview: true }),
+    body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: message, parse_mode: "HTML", disable_web_page_preview: true }),
     signal: AbortSignal.timeout(15000)
   });
   const result = await response.json();
@@ -74,17 +74,47 @@ function rarityEmoji(rarity) {
   return "⚪";
 }
 
+function isHighValue(item) {
+  const rarity = String(item.rarity || "").trim().toLowerCase();
+  return ["ultimate", "ultra", "legendary", "legend"].includes(rarity);
+}
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"]/g, character => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;"
+  })[character]);
+}
+
+function formatDropItem(item) {
+  const quantity = Number(item.quantity) > 0 ? Number(item.quantity) : 1;
+  const line = `${rarityEmoji(item.rarity)} x${quantity} ${escapeHtml(item.name || "Unknown item")}`;
+  return isHighValue(item) ? `<b>${line}</b>` : line;
+}
+
 function formatDropItems(drop) {
   const items = Array.isArray(drop.items) ? drop.items : [];
   if (!items.length) return "No item details";
-  return items.map(item => {
-    const quantity = Number(item.quantity) > 0 ? Number(item.quantity) : 1;
-    return `${rarityEmoji(item.rarity)} x${quantity} ${item.name || "Unknown item"}`;
-  }).join("\n");
+  return items.map(formatDropItem).join("\n");
 }
 
 function formatNewDrop(drop) {
-  return ["📦 NEW BALDHERO DROP", formatDropItems(drop)].join("\n");
+  const items = Array.isArray(drop.items) ? drop.items : [];
+  const highValue = items.filter(isHighValue);
+  const otherDrops = items.filter(item => !isHighValue(item));
+  const sections = ["📦 <b>NEW BALDHERO DROP</b>"];
+
+  if (highValue.length) {
+    sections.push("🔥 <b>HIGH VALUE DROPS</b>", highValue.map(formatDropItem).join("\n"));
+  }
+  if (otherDrops.length) {
+    sections.push("📦 <b>OTHER DROPS</b>", otherDrops.map(formatDropItem).join("\n"));
+  }
+  if (!items.length) sections.push("No item details");
+
+  return sections.join("\n\n");
 }
 
 async function checkForInactivity() {
