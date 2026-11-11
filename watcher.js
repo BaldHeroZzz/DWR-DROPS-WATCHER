@@ -35,7 +35,7 @@ function saveState() {
   fs.renameSync(tempFile, STATE_FILE);
 }
 
-async function getLatestDrop() {
+async function getDrops() {
   const response = await fetch(DROP_API_URL, {
     headers: { Accept: "application/json" },
     signal: AbortSignal.timeout(90000)
@@ -43,7 +43,7 @@ async function getLatestDrop() {
   if (!response.ok) throw new Error(`Drop API returned HTTP ${response.status}`);
   const drops = await response.json();
   if (!Array.isArray(drops)) throw new Error("BaldHero Drops API response was not an array");
-  return drops[0] || null;
+  return drops;
 }
 
 async function sendTelegramMessage(message) {
@@ -63,24 +63,36 @@ function dropIdentifier(drop) {
   return String(drop.id || `${drop.timestamp || ""}|${drop.author || ""}|${drop.dungeon || ""}`);
 }
 
-function describeDrop(drop) {
+function rarityEmoji(rarity) {
+  const value = String(rarity || "").trim().toLowerCase();
+  if (["ultimate", "ultra"].includes(value)) return "🔴";
+  if (["legendary", "legend"].includes(value)) return "🟡";
+  if (["mythic", "epic", "gilded"].includes(value)) return "🟣";
+  if (["rare"].includes(value)) return "🔵";
+  if (["uncommon", "green"].includes(value)) return "🟢";
+  if (["common", "normal", "gray", "grey"].includes(value)) return "⚪";
+  return "⚪";
+}
+
+function formatDropItems(drop) {
   const items = Array.isArray(drop.items) ? drop.items : [];
-  const itemLines = items.length
-    ? items.map(item => `• ${item.name || "Unknown item"} — ${item.rarity || "Unknown rarity"} ×${item.quantity || 1}`).join("\n")
-    : "No item details";
-  return [
-    drop.dungeon ? `Dungeon: ${drop.dungeon}` : null,
-    drop.boss ? `Boss: ${drop.boss}` : null,
-    `Player: ${drop.author || "Unknown player"}`,
-    itemLines
-  ].filter(Boolean).join("\n");
+  if (!items.length) return "No item details";
+  return items.map(item => {
+    const quantity = Number(item.quantity) > 0 ? Number(item.quantity) : 1;
+    return `${rarityEmoji(item.rarity)} x${quantity} ${item.name || "Unknown item"}`;
+  }).join("\n");
+}
+
+function formatNewDrop(drop) {
+  return ["📦 NEW BALDHERO DROP", formatDropItems(drop)].join("\n");
 }
 
 async function checkForInactivity() {
   if (checking) return;
   checking = true;
   try {
-    const latest = await getLatestDrop();
+    const drops = await getDrops();
+    const latest = drops[0] || null;
     if (!latest) {
       console.log("BaldHero Drops has no records yet.");
       return;
@@ -93,12 +105,33 @@ async function checkForInactivity() {
       return;
     }
 
-    if (latestId !== state.latestDropId) {
+    if (!state.latestDropId) {
       state.latestDropId = latestId;
       state.lastDropAt = new Date(latestAt).toISOString();
       state.alertedDropId = null;
       saveState();
-      console.log(`New BaldHero drop detected: ${latest.dungeon || "Dungeon Quest"} at ${state.lastDropAt}`);
+      console.log("Saved the current latest drop as the initial baseline.");
+      return;
+    }
+
+    if (latestId !== state.latestDropId) {
+      const previousIndex = drops.findIndex(drop => dropIdentifier(drop) === state.latestDropId);
+      const unseenDrops = previousIndex >= 0
+        ? drops.slice(0, previousIndex).reverse()
+        : [latest];
+
+      for (const drop of unseenDrops) {
+        const dropId = dropIdentifier(drop);
+        const dropAt = Date.parse(drop.timestamp);
+        if (!Number.isFinite(dropAt)) throw new Error("A new BaldHero drop has an invalid timestamp.");
+
+        await sendTelegramMessage(formatNewDrop(drop));
+        state.latestDropId = dropId;
+        state.lastDropAt = new Date(dropAt).toISOString();
+        state.alertedDropId = null;
+        saveState();
+        console.log(`Telegram new-drop notification sent: ${dropId}`);
+      }
     } else if (!state.lastDropAt) {
       state.lastDropAt = new Date(latestAt).toISOString();
       saveState();
@@ -112,7 +145,8 @@ async function checkForInactivity() {
     const message = [
       "⏰ BALDHERO DROPS INACTIVITY ALERT",
       `No new drops have been detected for at least ${INACTIVITY_MINUTES} minutes.`,
-      describeDrop(latest),
+      "Last recorded drops:",
+      formatDropItems(latest),
       `Last drop: ${new Date(lastDropTime).toLocaleString("en-PH", { timeZone: "Asia/Manila" })} (Philippine time)`,
       `Quiet period: ${Math.floor(quietFor / 60000)} minutes`
     ].join("\n\n");
