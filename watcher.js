@@ -100,11 +100,26 @@ function formatDropItems(drop) {
   return items.map(formatDropItem).join("\n");
 }
 
+function formatDropTimestamp(drop) {
+  const timestamp = Date.parse(drop.timestamp);
+  if (!Number.isFinite(timestamp)) return "🕒 Time unavailable";
+  const formatted = new Date(timestamp).toLocaleString("en-PH", {
+    timeZone: "Asia/Manila",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true
+  });
+  return `🕒 ${formatted} (PHT)`;
+}
+
 function formatNewDrop(drop) {
   const items = Array.isArray(drop.items) ? drop.items : [];
   const highValue = items.filter(isHighValue);
   const otherDrops = items.filter(item => !isHighValue(item));
-  const sections = ["📦 <b>NEW BALDHERO DROP</b>"];
+  const sections = ["📦 <b>NEW BALDHERO DROP</b>", formatDropTimestamp(drop)];
 
   if (highValue.length) {
     sections.push("🔥 <b>HIGH VALUE DROPS</b>", highValue.map(formatDropItem).join("\n"));
