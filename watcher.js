@@ -76,7 +76,9 @@ function rarityEmoji(rarity) {
 
 function isHighValue(item) {
   const rarity = String(item.rarity || "").trim().toLowerCase();
-  return ["ultimate", "ultra", "legendary", "legend"].includes(rarity);
+  const name = String(item.name || "").trim().toLowerCase();
+  return ["ultimate", "ultra", "legendary", "legend"].includes(rarity)
+    || name.includes("gildenscale");
 }
 
 function escapeHtml(value) {
@@ -88,6 +90,25 @@ function escapeHtml(value) {
   })[character]);
 }
 
+function combineDuplicateItems(items) {
+  const combined = new Map();
+
+  for (const item of items) {
+    const name = String(item.name || "Unknown item").trim();
+    const rarity = String(item.rarity || "").trim();
+    const key = JSON.stringify([name, rarity]);
+    const quantity = Number(item.quantity) > 0 ? Number(item.quantity) : 1;
+
+    if (combined.has(key)) {
+      combined.get(key).quantity += quantity;
+    } else {
+      combined.set(key, { ...item, name, rarity, quantity });
+    }
+  }
+
+  return [...combined.values()];
+}
+
 function formatDropItem(item) {
   const quantity = Number(item.quantity) > 0 ? Number(item.quantity) : 1;
   const line = `${rarityEmoji(item.rarity)} x${quantity} ${escapeHtml(item.name || "Unknown item")}`;
@@ -95,7 +116,7 @@ function formatDropItem(item) {
 }
 
 function formatDropItems(drop) {
-  const items = Array.isArray(drop.items) ? drop.items : [];
+  const items = Array.isArray(drop.items) ? combineDuplicateItems(drop.items) : [];
   if (!items.length) return "No item details";
   return items.map(formatDropItem).join("\n");
 }
@@ -116,7 +137,7 @@ function formatDropTimestamp(drop) {
 }
 
 function formatNewDrop(drop) {
-  const items = Array.isArray(drop.items) ? drop.items : [];
+  const items = Array.isArray(drop.items) ? combineDuplicateItems(drop.items) : [];
   const highValue = items.filter(isHighValue);
   const otherDrops = items.filter(item => !isHighValue(item));
   const sections = ["📦 <b>NEW BALDHERO DROP</b>", formatDropTimestamp(drop)];
