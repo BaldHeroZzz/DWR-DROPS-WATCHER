@@ -1,4 +1,4 @@
-name: DQR Drop Watcher
+name: BaldHero Drops Watcher
 
 on:
   schedule:
@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: dqr-drop-watcher
+  group: baldhero-drops-watcher
   cancel-in-progress: false
 
 jobs:
@@ -27,7 +27,7 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Check drop feed and send alert if needed
+      - name: Check BaldHero feed and send alert if needed
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -36,14 +36,18 @@ jobs:
         run: node check.js
 
       - name: Save watcher state
-        if: always() && success()
+        if: success()
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -f data/state.json
-          if ! git diff --cached --quiet; then
-            git commit -m "chore: update watcher state [skip ci]"
-            git push
+          if [ -f data/state.json ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -f data/state.json
+            if ! git diff --cached --quiet; then
+              git commit -m "chore: update watcher state [skip ci]"
+              git push
+            else
+              echo "Watcher state unchanged."
+            fi
           else
-            echo "Watcher state unchanged."
+            echo "No state file to save yet."
           fi
