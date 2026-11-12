@@ -1,15 +1,15 @@
-name: Send Image Test to Telegram
+name: Send Individual Image Test to Telegram
 
 on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   send-images:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -17,7 +17,26 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-      - name: Send all item images to Telegram
+      - name: Set up Python and Pillow
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Pillow
+        run: python -m pip install --upgrade Pillow
+      - name: Remove white backgrounds from item images
+        run: python make-images-transparent.py
+      - name: Save transparent PNGs to the repository
+        run: |
+          if ! git diff --quiet -- images; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add images
+            git commit -m "Make item image backgrounds transparent"
+            git push
+          else
+            echo "Images already have transparent backgrounds."
+          fi
+      - name: Send images individually to Telegram
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
