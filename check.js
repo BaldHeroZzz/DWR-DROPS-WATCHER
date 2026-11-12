@@ -147,10 +147,10 @@ function toWellFormedUnicode(value) {
         output += input[i] + input[i + 1];
         i++;
       } else {
-        output += "\\uFFFD";
+        output += "\uFFFD";
       }
     } else if (code >= 0xDC00 && code <= 0xDFFF) {
-      output += "\\uFFFD";
+      output += "\uFFFD";
     } else {
       output += input[i];
     }
