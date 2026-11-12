@@ -45,8 +45,18 @@ function rarityEmoji(rarity) {
   return "⚪";
 }
 
-function escapeRegExp(value) {
-  return String(value).replace(/[.*+?^${}()|[\\]\\]/g, "\\function isWantedItem(item) {");
+function getItemColorEmoji(item, drop) {
+  const rawText = String(drop.rawText || "");
+  const name = String(item.name || "").trim();
+  if (rawText && name) {
+    const pattern = new RegExp("([⚪🔵🟢🟣🟡🔴🟠])\\s*" + name + "\\s*,", "i");
+    const match = rawText.match(pattern);
+    if (match) return match[1];
+  }
+  return rarityEmoji(item.rarity);
+}
+
+function isWantedItem(item) {");
 }
 
 function getItemColorEmoji(item, drop) {
@@ -99,12 +109,12 @@ function formatDropItem(item, drop) {
   const line = `${getItemColorEmoji(item, drop)} x${quantity} ${escapeHtml(item.name || "Unknown item")}`;
   const power = String(item.potential || "").trim();
   const percent = Number.isFinite(Number(item.percent)) && item.percent !== null && item.percent !== ""
-    ? ` (${Number(item.percent)}%)`
+    ? ` · ${Number(item.percent)}%`
     : "";
   const stats = power
-    ? `\\n   ⚡ Power: ${escapeHtml(power)}${percent}`
+    ? `\n   ⚡ Power: ${escapeHtml(power)}${percent}`
     : percent
-      ? `\\n   📊 ${percent.trim().replace(/^\\(|\\)$/g, "")}`
+      ? `\n   📊 Potential: ${percent.slice(3)}`
       : "";
   const formatted = line + stats;
   return isHighValue(item) ? `<b>${formatted}</b>` : formatted;
