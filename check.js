@@ -34,12 +34,14 @@ function getDropId(drop) {
   return String(drop.id || `${drop.timestamp || ""}|${drop.author || ""}|${drop.dungeon || ""}`);
 }
 
-function rarityEmoji(rarity, itemName = "") {
+function rarityEmoji(rarity) {
   const value = String(rarity || "").trim().toLowerCase();
-  const name = String(itemName || "").trim().toLowerCase();
   if (["ultimate", "ultra"].includes(value)) return "🔴";
   if (["legendary", "legend"].includes(value)) return "🟡";
-  if (["mythic", "epic", "gilded"].includes(value) || name.includes("gildenscale")) return "🟣";
+  if (["mythic", "epic", "gilded"].includes(value)) return "🟣";
+  if (["rare", "blue"].includes(value)) return "🔵";
+  if (["uncommon", "green"].includes(value)) return "🟢";
+  if (["common", "gray", "grey"].includes(value)) return "⚪";
   return "⚪";
 }
 
@@ -79,7 +81,7 @@ function combineDuplicateItems(items) {
 
 function formatDropItem(item) {
   const quantity = Number(item.quantity) > 0 ? Number(item.quantity) : 1;
-  const line = `${rarityEmoji(item.rarity, item.name)} x${quantity} ${escapeHtml(item.name || "Unknown item")}`;
+  const line = `${rarityEmoji(item.rarity)} x${quantity} ${escapeHtml(item.name || "Unknown item")}`;
   return isHighValue(item) ? `<b>${line}</b>` : line;
 }
 
@@ -108,7 +110,7 @@ function formatNewDrop(drop) {
     sections.push("🔥 <b>LEGENDARY / ULTIMATE</b>", highValue.map(formatDropItem).join("\n"));
   }
   if (gildenscales.length) {
-    sections.push("🟣 <b>GILDENSCALE DROPS</b>", gildenscales.map(formatDropItem).join("\n"));
+    sections.push("⚔️ <b>GILDENSCALE DROPS</b>", gildenscales.map(formatDropItem).join("\n"));
   }
   return sections.join("\n\n");
 }
@@ -161,7 +163,6 @@ async function main() {
     if (!Number.isFinite(latestAt)) throw new Error("Latest BaldHero drop has an invalid timestamp.");
 
     if (!state.latestDropId) {
-      // Establish a baseline without replaying old drops on the first run.
       state.latestDropId = latestId;
       saveState(state);
       console.log("Saved the current latest drop as the initial baseline.");
@@ -189,7 +190,6 @@ async function main() {
     console.log("BaldHero Drops has no records yet.");
   }
 
-  // Count only checks that successfully fetched and processed the drop feed.
   await sendRunCompletion(state);
 }
 
