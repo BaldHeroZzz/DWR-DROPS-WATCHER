@@ -234,18 +234,18 @@ async function sendTelegramPhoto(photoPath) {
   console.log(`Telegram item image sent: ${path.basename(photoPath)}`);
 }
 
-async function sendRunCompletion(state) {
-  const nextRun = Math.max(0, Number(state.completedRuns) || 0) + 1;
-  await sendTelegramMessage(`✅ A (x${nextRun}) run is completed for (${RUN_DURATION_LABEL} duration)`);
-  state.completedRuns = nextRun;
-  saveState(state);
-  console.log(`Telegram run-completion notification sent: x${nextRun}`);
+async function sendRunCompletion(dungeonCount) {
+  const count = Math.max(0, Number(dungeonCount) || 0);
+  const label = count === 1 ? "Dungeon Completed" : "Dungeons Completed";
+  await sendTelegramMessage(`✅ x${count} ${label} (Last ${RUN_DURATION_LABEL})`);
+  console.log(`Telegram dungeon-completion notification sent: x${count}`);
 }
 
 async function main() {
   const drops = await getDrops();
   const state = loadState();
   const latest = drops[0] || null;
+  let completedDungeons = 0;
 
   if (latest) {
     const latestId = getDropId(latest);
@@ -259,6 +259,7 @@ async function main() {
     } else if (latestId !== state.latestDropId) {
       const previousIndex = drops.findIndex(drop => getDropId(drop) === state.latestDropId);
       const unseenDrops = previousIndex >= 0 ? drops.slice(0, previousIndex).reverse() : [latest];
+      completedDungeons = unseenDrops.length;
 
       for (const drop of unseenDrops) {
         const dropId = getDropId(drop);
@@ -283,7 +284,7 @@ async function main() {
     console.log("BaldHero Drops has no records yet.");
   }
 
-  await sendRunCompletion(state);
+  await sendRunCompletion(completedDungeons);
 }
 
 main().catch(error => {
