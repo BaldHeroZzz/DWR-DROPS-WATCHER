@@ -45,6 +45,21 @@ function rarityEmoji(rarity) {
   return "⚪";
 }
 
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\\]\\]/g, "\\function isWantedItem(item) {");
+}
+
+function getItemColorEmoji(item, drop) {
+  const rawText = String(drop.rawText || "");
+  const name = String(item.name || "").trim();
+  if (rawText && name) {
+    const pattern = new RegExp("([⚪🔵🟢🟣🟡🔴🟠])\\s*" + escapeRegExp(name) + "\\s*,", "i");
+    const match = rawText.match(pattern);
+    if (match) return match[1];
+  }
+  return rarityEmoji(item.rarity);
+}
+
 function isWantedItem(item) {
   const rarity = String(item.rarity || "").trim().toLowerCase();
   const name = String(item.name || "").trim().toLowerCase();
@@ -79,10 +94,20 @@ function combineDuplicateItems(items) {
   return [...combined.values()];
 }
 
-function formatDropItem(item) {
+function formatDropItem(item, drop) {
   const quantity = Number(item.quantity) > 0 ? Number(item.quantity) : 1;
-  const line = `${rarityEmoji(item.rarity)} x${quantity} ${escapeHtml(item.name || "Unknown item")}`;
-  return isHighValue(item) ? `<b>${line}</b>` : line;
+  const line = `${getItemColorEmoji(item, drop)} x${quantity} ${escapeHtml(item.name || "Unknown item")}`;
+  const power = String(item.potential || "").trim();
+  const percent = Number.isFinite(Number(item.percent)) && item.percent !== null && item.percent !== ""
+    ? ` (${Number(item.percent)}%)`
+    : "";
+  const stats = power
+    ? `\\n   ⚡ Power: ${escapeHtml(power)}${percent}`
+    : percent
+      ? `\\n   📊 ${percent.trim().replace(/^\\(|\\)$/g, "")}`
+      : "";
+  const formatted = line + stats;
+  return isHighValue(item) ? `<b>${formatted}</b>` : formatted;
 }
 
 function formatDropTimestamp(drop) {
@@ -107,10 +132,10 @@ function formatNewDrop(drop) {
   const gildenscales = items.filter(item => !isHighValue(item));
   const sections = ["📦 <b>NEW BALDHERO DROP</b>", formatDropTimestamp(drop)];
   if (highValue.length) {
-    sections.push("🔥 <b>LEGENDARY / ULTIMATE</b>", highValue.map(formatDropItem).join("\n"));
+    sections.push("🔥 <b>LEGENDARY / ULTIMATE</b>", highValue.map(item => formatDropItem(item, drop)).join("\n"));
   }
   if (gildenscales.length) {
-    sections.push("⚔️ <b>GILDENSCALE DROPS</b>", gildenscales.map(formatDropItem).join("\n"));
+    sections.push("⚔️ <b>GILDENSCALE DROPS</b>", gildenscales.map(item => formatDropItem(item, drop)).join("\n"));
   }
   return sections.join("\n\n");
 }
