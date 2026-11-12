@@ -136,13 +136,36 @@ async function getDrops() {
   return drops;
 }
 
+function toWellFormedUnicode(value) {
+  const input = String(value);
+  let output = "";
+  for (let i = 0; i < input.length; i++) {
+    const code = input.charCodeAt(i);
+    if (code >= 0xD800 && code <= 0xDBFF) {
+      const next = input.charCodeAt(i + 1);
+      if (next >= 0xDC00 && next <= 0xDFFF) {
+        output += input[i] + input[i + 1];
+        i++;
+      } else {
+        output += "\\uFFFD";
+      }
+    } else if (code >= 0xDC00 && code <= 0xDFFF) {
+      output += "\\uFFFD";
+    } else {
+      output += input[i];
+    }
+  }
+  return output;
+}
+
 async function sendTelegramMessage(message) {
+  const safeMessage = toWellFormedUnicode(message);
   const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       chat_id: TELEGRAM_CHAT_ID,
-      text: message,
+      text: safeMessage,
       parse_mode: "HTML",
       disable_web_page_preview: true
     }),
