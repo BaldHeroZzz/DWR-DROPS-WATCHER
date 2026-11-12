@@ -202,7 +202,7 @@ function getItemImagePath(item) {
     return path.join(base, "legendary", "warrior-legendary-weapons.png");
   }
   if (name.includes("gildenscale")) {
-    const className = name.includes("guarding") ? "guarding"
+    const className = (name.includes("guardian") || name.includes("guarding")) ? "guarding"
       : name.includes("warrior") ? "warrior"
       : name.includes("mage") ? "mage" : null;
     if (!className) return null;
