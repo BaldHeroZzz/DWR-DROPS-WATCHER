@@ -2,13 +2,13 @@
   "name": "dwr-drops-watcher",
   "version": "1.0.0",
   "private": true,
-  "description": "Standalone Telegram inactivity notifier for the existing DQR Discord drop monitor.",
-  "main": "watcher.js",
+  "description": "Standalone BaldHero drop watcher with Telegram notifications.",
+  "main": "check.js",
   "scripts": {
-    "start": "node watcher.js",
+    "start": "node check.js",
     "check": "node check.js"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   }
 }
