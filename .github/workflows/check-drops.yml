@@ -27,12 +27,14 @@ jobs:
         with:
           node-version: "20"
 
+      - name: Validate watcher syntax
+        run: node --check check.js
+
       - name: Check BaldHero feed and send alert if needed
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           DROP_API_URL: ${{ vars.DROP_API_URL }}
-          INACTIVITY_MINUTES: ${{ vars.INACTIVITY_MINUTES }}
         run: node check.js
 
       - name: Save watcher state
