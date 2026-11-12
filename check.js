@@ -102,7 +102,7 @@ function formatDropItem(item, drop) {
     ? ` · ${Number(item.percent)}%`
     : "";
   const stats = power
-    ? `\\n   ⚡ Power: ${escapeHtml(power)}${percent}`
+    ? `\n   ⚡ Power: ${escapeHtml(power)}${percent}`
     : percent
       ? `\\n   📊 Potential: ${percent.slice(3)}`
       : "";
@@ -132,12 +132,12 @@ function formatNewDrop(drop) {
   const gildenscales = items.filter(item => !isHighValue(item));
   const sections = ["📦 <b>NEW BALDHERO DROP</b>", formatDropTimestamp(drop)];
   if (highValue.length) {
-    sections.push("🔥 <b>LEGENDARY / ULTIMATE</b>", highValue.map(item => formatDropItem(item, drop)).join("\\n"));
+    sections.push("🔥 <b>LEGENDARY / ULTIMATE</b>", highValue.map(item => formatDropItem(item, drop)).join("\n"));
   }
   if (gildenscales.length) {
-    sections.push("⚔️ <b>GILDENSCALE DROPS</b>", gildenscales.map(item => formatDropItem(item, drop)).join("\\n"));
+    sections.push("⚔️ <b>GILDENSCALE DROPS</b>", gildenscales.map(item => formatDropItem(item, drop)).join("\n"));
   }
-  return sections.join("\\n\\n");
+  return sections.join("\n\n");
 }
 
 async function getDrops() {
