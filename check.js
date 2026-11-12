@@ -94,50 +94,35 @@ function combineDuplicateItems(items) {
   return [...combined.values()];
 }
 
+function toUnicodeBold(value) {
+  const normal = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  const bold = "𝐀𝐁𝐂𝐃𝐄𝐅𝐆𝐇𝐈𝐉𝐊𝐋𝐌𝐍𝐎𝐏𝐐𝐑𝐒𝐓𝐔𝐕𝐖𝐗𝐘𝐙𝐚𝐛𝐜𝐝𝐞𝐟𝐠𝐡𝐢𝐣𝐤𝐥𝐦𝐧𝐨𝐩𝐪𝐫𝐬𝐭𝐮𝐯𝐰𝐱𝐲𝐳𝟎𝟏𝟐𝟑𝟒𝟓𝟔𝟕𝟖𝟗";
+  return [...String(value)].map(character => {
+    const index = normal.indexOf(character);
+    return index >= 0 ? [...bold][index] : character;
+  }).join("");
+}
+
+function getWantedItems(drop) {
+  return combineDuplicateItems((Array.isArray(drop.items) ? drop.items : []).filter(isWantedItem));
+}
+
 function formatDropItem(item, drop) {
+  const emoji = getItemColorEmoji(item, drop);
   const quantity = Number(item.quantity) > 0 ? Number(item.quantity) : 1;
-  const line = `${getItemColorEmoji(item, drop)} x${quantity} ${escapeHtml(item.name || "Unknown item")}`;
+  const quantityText = quantity > 1 ? `x${quantity} ` : "";
+  const name = toUnicodeBold(String(item.name || "Unknown item").toUpperCase());
+  const title = `${emoji} ${quantityText}${name} ${emoji}`;
   const power = String(item.potential || "").trim();
   const percent = Number.isFinite(Number(item.percent)) && item.percent !== null && item.percent !== ""
-    ? ` · ${Number(item.percent)}%`
+    ? ` (${Number(item.percent)}%)`
     : "";
   const stats = power
-    ? `\n   ⚡ Power: ${escapeHtml(power)}${percent}`
+    ? `\n\n${toUnicodeBold("Power :")} ${toUnicodeBold(power + percent)}`
     : percent
-      ? `\\n   📊 Potential: ${percent.slice(3)}`
+      ? `\n\n${toUnicodeBold("Potential :")} ${toUnicodeBold(percent.trim().replace(/^\(|\)$/g, ""))}`
       : "";
-  const formatted = line + stats;
-  return isHighValue(item) ? `<b>${formatted}</b>` : formatted;
-}
-
-function formatDropTimestamp(drop) {
-  const timestamp = Date.parse(drop.timestamp);
-  if (!Number.isFinite(timestamp)) return "🕒 Time unavailable";
-  const formatted = new Date(timestamp).toLocaleString("en-PH", {
-    timeZone: "Asia/Manila",
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true
-  });
-  return `🕒 ${formatted} (PHT)`;
-}
-
-function formatNewDrop(drop) {
-  const items = combineDuplicateItems((Array.isArray(drop.items) ? drop.items : []).filter(isWantedItem));
-  if (!items.length) return null;
-  const highValue = items.filter(isHighValue);
-  const gildenscales = items.filter(item => !isHighValue(item));
-  const sections = ["📦 <b>NEW BALDHERO DROP</b>", formatDropTimestamp(drop)];
-  if (highValue.length) {
-    sections.push("🔥 <b>LEGENDARY / ULTIMATE</b>", highValue.map(item => formatDropItem(item, drop)).join("\n"));
-  }
-  if (gildenscales.length) {
-    sections.push("⚔️ <b>GILDENSCALE DROPS</b>", gildenscales.map(item => formatDropItem(item, drop)).join("\n"));
-  }
-  return sections.join("\n\n");
+  return title + stats;
 }
 
 async function getDrops() {
@@ -226,17 +211,6 @@ async function sendTelegramPhoto(photoPath) {
   console.log(`Telegram item image sent: ${path.basename(photoPath)}`);
 }
 
-async function sendDropImages(drop) {
-  const items = combineDuplicateItems((Array.isArray(drop.items) ? drop.items : []).filter(isWantedItem));
-  const sent = new Set();
-  for (const item of items) {
-    const imagePath = getItemImagePath(item);
-    if (!imagePath || sent.has(imagePath)) continue;
-    await sendTelegramPhoto(imagePath);
-    sent.add(imagePath);
-  }
-}
-
 async function sendRunCompletion(state) {
   const nextRun = Math.max(0, Number(state.completedRuns) || 0) + 1;
   await sendTelegramMessage(`✅ A (x${nextRun}) run is completed for (${RUN_DURATION_LABEL} duration)`);
@@ -268,11 +242,13 @@ async function main() {
         const dropAt = Date.parse(drop.timestamp);
         if (!Number.isFinite(dropAt)) throw new Error("A new BaldHero drop has an invalid timestamp.");
 
-        const message = formatNewDrop(drop);
-        if (message) {
-          await sendTelegramMessage(message);
-          await sendDropImages(drop);
-          console.log(`Telegram filtered drop notification and matching images sent: ${dropId}`);
+        const items = getWantedItems(drop);
+        if (items.length) {
+          for (const item of items) {
+            await sendTelegramMessage(formatDropItem(item, drop));
+            await sendTelegramPhoto(getItemImagePath(item));
+          }
+          console.log(`Telegram item notifications and matching images sent: ${dropId}`);
         } else {
           console.log(`No Gildenscale, Legendary, or Ultimate items in drop: ${dropId}`);
         }
