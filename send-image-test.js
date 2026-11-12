@@ -16,8 +16,8 @@ const tests = [
   ["🟣", "PURPLE"]
 ];
 const imagePath = "images/gildenscale/mage-armor.png";
-const itemName = "Gildenscale Mage Armor";
-const powerLine = "Power : 14.5 (100%)";
+const itemName = "𝐆𝐈𝐋𝐃𝐄𝐍𝐒𝐂𝐀𝐋𝐄 𝐌𝐀𝐆𝐄 𝐀𝐑𝐌𝐎𝐑";
+const powerLine = "𝐏𝐨𝐰𝐞𝐫 : 𝟏𝟒.𝟓 (𝟏𝟎𝟎%)";
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 async function telegram(method, body) {
@@ -54,11 +54,11 @@ async function sendPhoto(index) {
 async function main() {
   for (let i = 0; i < tests.length; i++) {
     const [marker, rarity] = tests[i];
-    // Send the requested two-line label first, then the transparent item image.
+    // Telegram doesn't support font-size styling, so use bold Unicode lettering
+    // in a standalone text message above each photo for a much stronger look.
     await telegram("sendMessage", {
       chat_id: TELEGRAM_CHAT_ID,
-      text: `${marker} <b>${itemName}</b> ${marker}\nPower : <b>14.5 (100%)</b>`,
-      parse_mode: "HTML",
+      text: `${marker} ${itemName} ${marker}\n\n${powerLine}`,
       disable_web_page_preview: true
     });
     await sleep(350);
