@@ -50,14 +50,16 @@ function escapeRegExp(value) {
 }
 
 function getItemColorEmoji(item, drop) {
+  const validColors = new Set(["⚪", "🔵", "🟢", "🟣", "🟡", "🔴", "🟠"]);
   const rawText = String(drop.rawText || "");
   const name = String(item.name || "").trim();
   if (rawText && name) {
     const pattern = new RegExp("([⚪🔵🟢🟣🟡🔴🟠])\\s*" + escapeRegExp(name) + "\\s*,", "i");
     const match = rawText.match(pattern);
-    if (match) return match[1];
+    if (match && validColors.has(match[1])) return match[1];
   }
-  return rarityEmoji(item.rarity);
+  const fallback = rarityEmoji(item.rarity);
+  return validColors.has(fallback) ? fallback : "⚪";
 }
 
 function isWantedItem(item) {
