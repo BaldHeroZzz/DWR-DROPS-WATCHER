@@ -8,30 +8,35 @@ if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
   throw new Error("Missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID secrets.");
 }
 
-const images = [
-  ["images/gildenscale/mage-armor.png", "🔵", "GILDENSCALE MAGE ARMOR"],
-  ["images/gildenscale/mage-helmet.png", "🔵", "GILDENSCALE MAGE HELMET"],
-  ["images/gildenscale/warrior-armor.png", "🔴", "GILDENSCALE WARRIOR ARMOR"],
-  ["images/gildenscale/warrior-helmet.png", "🔴", "GILDENSCALE WARRIOR HELMET"],
-  ["images/gildenscale/guarding-armor.png", "🟢", "GILDENSCALE GUARDING ARMOR"],
-  ["images/gildenscale/guarding-helmet.png", "🟢", "GILDENSCALE GUARDING HELMET"],
-  ["images/legendary/mage-legendary-weapons.png", "🟡", "MAGE LEGENDARY WEAPONS"],
-  ["images/legendary/warrior-legendary-weapons.png", "🟡", "WARRIOR LEGENDARY WEAPONS"],
-  ["images/legendary/enhanced-inner-focus.png", "🟡", "ENHANCED INNER FOCUS"],
-  ["images/legendary/enhanced-inner-rage.png", "🟡", "ENHANCED INNER RAGE"],
-  ["images/ultimate/lumenflames-absolution.png", "🔴", "ULTIMATE — LUMENFLAME'S ABSOLUTION (MAGE)"],
-  ["images/ultimate/lumenflames-judgement.png", "🔴", "ULTIMATE — LUMENFLAME'S JUDGEMENT (WARRIOR)"]
+// Same Gildenscale image, four rarity markers, to verify the rarity-color mapping.
+const tests = [
+  ["⚪", "COMMON / GRAY"],
+  ["🟢", "UNCOMMON / GREEN"],
+  ["🔵", "RARE / BLUE"],
+  ["🟣", "EPIC / PURPLE"]
 ];
-
+const imagePath = "images/gildenscale/mage-armor.png";
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-async function sendPhoto(file, marker, title, index) {
-  const bytes = await fs.readFile(path.resolve(file));
+async function telegram(method, body) {
+  const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/${method}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(60000)
+  });
+  const result = await response.json();
+  if (!response.ok || !result.ok) {
+    throw new Error(result.description || `Telegram ${method} failed with HTTP ${response.status}`);
+  }
+  return result;
+}
+
+async function sendPhoto(marker, rarity, index) {
+  const bytes = await fs.readFile(path.resolve(imagePath));
   const form = new FormData();
   form.append("chat_id", TELEGRAM_CHAT_ID);
-  form.append("parse_mode", "HTML");
-  form.append("caption", `${marker} <b>${title}</b>`);
-  form.append("photo", new Blob([bytes], { type: "image/png" }), path.basename(file));
+  form.append("photo", new Blob([bytes], { type: "image/png" }), path.basename(imagePath));
 
   const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`, {
     method: "POST",
@@ -42,16 +47,25 @@ async function sendPhoto(file, marker, title, index) {
   if (!response.ok || !result.ok) {
     throw new Error(result.description || `Telegram photo ${index} failed with HTTP ${response.status}`);
   }
-  console.log(`Sent ${index}/${images.length}: ${title}`);
+  console.log(`Sent Gildenscale image for ${rarity}.`);
 }
 
 async function main() {
-  for (let i = 0; i < images.length; i++) {
-    const [file, marker, title] = images[i];
-    await sendPhoto(file, marker, title, i + 1);
-    if (i < images.length - 1) await sleep(900);
+  for (let i = 0; i < tests.length; i++) {
+    const [marker, rarity] = tests[i];
+    // Separate text first, then photo, so the label visibly sits above its image.
+    await telegram("sendMessage", {
+      chat_id: TELEGRAM_CHAT_ID,
+      text: `${marker} <b>GILDENSCALE — ${rarity}</b>`,
+      parse_mode: "HTML",
+      disable_web_page_preview: true
+    });
+    await sleep(350);
+    await sendPhoto(marker, rarity, i + 1);
+    console.log(`Completed rarity test ${i + 1}/${tests.length}: ${rarity}`);
+    if (i < tests.length - 1) await sleep(900);
   }
-  console.log(`Image test complete: sent ${images.length} photos individually.`);
+  console.log("Gildenscale rarity test complete: 4 labeled photos sent individually.");
 }
 
 main().catch(error => {
