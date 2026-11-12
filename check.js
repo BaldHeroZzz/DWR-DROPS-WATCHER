@@ -4,9 +4,9 @@ const path = require("node:path");
 const DROP_API_URL = process.env.DROP_API_URL || "https://baldhero-loots.onrender.com/api/drops";
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
-const INACTIVITY_MINUTES = Math.max(1, Number(process.env.INACTIVITY_MINUTES || 10));
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, "data");
 const STATE_FILE = path.join(DATA_DIR, "state.json");
+const RUN_DURATION_LABEL = "5 minutes";
 
 if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
   console.error("Missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID GitHub Actions secrets.");
@@ -19,7 +19,7 @@ function loadState() {
     return JSON.parse(fs.readFileSync(STATE_FILE, "utf8"));
   } catch (error) {
     if (error.code !== "ENOENT") throw error;
-    return { latestDropId: null, lastDropAt: null, alertedDropId: null };
+    return { latestDropId: null, completedRuns: 0 };
   }
 }
 
@@ -34,15 +34,20 @@ function getDropId(drop) {
   return String(drop.id || `${drop.timestamp || ""}|${drop.author || ""}|${drop.dungeon || ""}`);
 }
 
-function rarityEmoji(rarity) {
+function rarityEmoji(rarity, itemName = "") {
   const value = String(rarity || "").trim().toLowerCase();
+  const name = String(itemName || "").trim().toLowerCase();
   if (["ultimate", "ultra"].includes(value)) return "🔴";
   if (["legendary", "legend"].includes(value)) return "🟡";
-  if (["mythic", "epic", "gilded"].includes(value)) return "🟣";
-  if (["rare"].includes(value)) return "🔵";
-  if (["uncommon", "green"].includes(value)) return "🟢";
-  if (["common", "normal", "gray", "grey"].includes(value)) return "⚪";
+  if (["mythic", "epic", "gilded"].includes(value) || name.includes("gildenscale")) return "🟣";
   return "⚪";
+}
+
+function isWantedItem(item) {
+  const rarity = String(item.rarity || "").trim().toLowerCase();
+  const name = String(item.name || "").trim().toLowerCase();
+  return name.includes("gildenscale")
+    || ["ultimate", "ultra", "legendary", "legend"].includes(rarity);
 }
 
 function isHighValue(item) {
@@ -59,16 +64,23 @@ function escapeHtml(value) {
   })[character]);
 }
 
-function formatDropItem(item) {
-  const quantity = Number(item.quantity) > 0 ? Number(item.quantity) : 1;
-  const line = `${rarityEmoji(item.rarity)} x${quantity} ${escapeHtml(item.name || "Unknown item")}`;
-  return isHighValue(item) ? `<b>${line}</b>` : line;
+function combineDuplicateItems(items) {
+  const combined = new Map();
+  for (const item of items) {
+    const name = String(item.name || "Unknown item").trim();
+    const rarity = String(item.rarity || "").trim();
+    const key = JSON.stringify([name.toLowerCase(), rarity.toLowerCase()]);
+    const quantity = Number(item.quantity) > 0 ? Number(item.quantity) : 1;
+    if (combined.has(key)) combined.get(key).quantity += quantity;
+    else combined.set(key, { ...item, name, rarity, quantity });
+  }
+  return [...combined.values()];
 }
 
-function formatDropItems(drop) {
-  const items = Array.isArray(drop.items) ? drop.items : [];
-  if (!items.length) return "No item details";
-  return items.map(formatDropItem).join("\n");
+function formatDropItem(item) {
+  const quantity = Number(item.quantity) > 0 ? Number(item.quantity) : 1;
+  const line = `${rarityEmoji(item.rarity, item.name)} x${quantity} ${escapeHtml(item.name || "Unknown item")}`;
+  return isHighValue(item) ? `<b>${line}</b>` : line;
 }
 
 function formatDropTimestamp(drop) {
@@ -87,19 +99,17 @@ function formatDropTimestamp(drop) {
 }
 
 function formatNewDrop(drop) {
-  const items = Array.isArray(drop.items) ? drop.items : [];
+  const items = combineDuplicateItems((Array.isArray(drop.items) ? drop.items : []).filter(isWantedItem));
+  if (!items.length) return null;
   const highValue = items.filter(isHighValue);
-  const otherDrops = items.filter(item => !isHighValue(item));
+  const gildenscales = items.filter(item => !isHighValue(item));
   const sections = ["📦 <b>NEW BALDHERO DROP</b>", formatDropTimestamp(drop)];
-
   if (highValue.length) {
-    sections.push("🔥 <b>HIGH VALUE DROPS</b>", highValue.map(formatDropItem).join("\n"));
+    sections.push("🔥 <b>LEGENDARY / ULTIMATE</b>", highValue.map(formatDropItem).join("\n"));
   }
-  if (otherDrops.length) {
-    sections.push("📦 <b>OTHER DROPS</b>", otherDrops.map(formatDropItem).join("\n"));
+  if (gildenscales.length) {
+    sections.push("🟣 <b>GILDENSCALE DROPS</b>", gildenscales.map(formatDropItem).join("\n"));
   }
-  if (!items.length) sections.push("No item details");
-
   return sections.join("\n\n");
 }
 
@@ -132,77 +142,55 @@ async function sendTelegramMessage(message) {
   }
 }
 
+async function sendRunCompletion(state) {
+  const nextRun = Math.max(0, Number(state.completedRuns) || 0) + 1;
+  await sendTelegramMessage(`✅ A (x${nextRun}) run is completed for (${RUN_DURATION_LABEL} duration)`);
+  state.completedRuns = nextRun;
+  saveState(state);
+  console.log(`Telegram run-completion notification sent: x${nextRun}`);
+}
+
 async function main() {
   const drops = await getDrops();
   const state = loadState();
   const latest = drops[0] || null;
 
-  if (!latest) {
-    console.log("BaldHero Drops has no records yet.");
-    saveState(state);
-    return;
-  }
+  if (latest) {
+    const latestId = getDropId(latest);
+    const latestAt = Date.parse(latest.timestamp);
+    if (!Number.isFinite(latestAt)) throw new Error("Latest BaldHero drop has an invalid timestamp.");
 
-  const latestId = getDropId(latest);
-  const latestAt = Date.parse(latest.timestamp);
-  if (!Number.isFinite(latestAt)) throw new Error("Latest BaldHero drop has an invalid timestamp.");
-
-  if (!state.latestDropId) {
-    // Establish a baseline on first run; do not send the entire historical feed.
-    state.latestDropId = latestId;
-    state.lastDropAt = new Date(latestAt).toISOString();
-    state.alertedDropId = null;
-    saveState(state);
-    console.log("Saved the current latest drop as the initial baseline.");
-    return;
-  }
-
-  if (latestId !== state.latestDropId) {
-    const previousIndex = drops.findIndex(drop => getDropId(drop) === state.latestDropId);
-    const unseenDrops = previousIndex >= 0
-      ? drops.slice(0, previousIndex).reverse()
-      : [latest];
-
-    for (const drop of unseenDrops) {
-      const dropId = getDropId(drop);
-      const dropAt = Date.parse(drop.timestamp);
-      if (!Number.isFinite(dropAt)) throw new Error("A new BaldHero drop has an invalid timestamp.");
-
-      await sendTelegramMessage(formatNewDrop(drop));
-      state.latestDropId = dropId;
-      state.lastDropAt = new Date(dropAt).toISOString();
-      state.alertedDropId = null;
+    if (!state.latestDropId) {
+      // Establish a baseline without replaying old drops on the first run.
+      state.latestDropId = latestId;
       saveState(state);
-      console.log(`Telegram new-drop notification sent: ${dropId}`);
+      console.log("Saved the current latest drop as the initial baseline.");
+    } else if (latestId !== state.latestDropId) {
+      const previousIndex = drops.findIndex(drop => getDropId(drop) === state.latestDropId);
+      const unseenDrops = previousIndex >= 0 ? drops.slice(0, previousIndex).reverse() : [latest];
+
+      for (const drop of unseenDrops) {
+        const dropId = getDropId(drop);
+        const dropAt = Date.parse(drop.timestamp);
+        if (!Number.isFinite(dropAt)) throw new Error("A new BaldHero drop has an invalid timestamp.");
+
+        const message = formatNewDrop(drop);
+        if (message) {
+          await sendTelegramMessage(message);
+          console.log(`Telegram filtered drop notification sent: ${dropId}`);
+        } else {
+          console.log(`No Gildenscale, Legendary, or Ultimate items in drop: ${dropId}`);
+        }
+        state.latestDropId = dropId;
+        saveState(state);
+      }
     }
-  } else if (!state.lastDropAt) {
-    state.lastDropAt = new Date(latestAt).toISOString();
-  }
-
-  const lastDropTime = Date.parse(state.lastDropAt);
-  if (!Number.isFinite(lastDropTime)) throw new Error("Saved lastDropAt timestamp is invalid.");
-  const quietForMs = Date.now() - lastDropTime;
-  const thresholdMs = INACTIVITY_MINUTES * 60 * 1000;
-
-  if (quietForMs >= thresholdMs && state.alertedDropId !== latestId) {
-    const quietMinutes = Math.floor(quietForMs / 60000);
-    const message = [
-      "⏰ BALDHERO DROPS INACTIVITY ALERT",
-      `No new drops have been recorded for at least ${INACTIVITY_MINUTES} minutes.`,
-      "Last recorded drops:",
-      formatDropItems(latest),
-      `Last drop time: ${new Date(lastDropTime).toLocaleString("en-PH", { timeZone: "Asia/Manila" })} (Philippine time)`,
-      `Quiet period: ${quietMinutes} minutes`
-    ].join("\n\n");
-
-    await sendTelegramMessage(message);
-    state.alertedDropId = latestId;
-    console.log("Telegram inactivity alert sent.");
   } else {
-    console.log(`No alert needed. Quiet for ${Math.floor(quietForMs / 60000)} minute(s).`);
+    console.log("BaldHero Drops has no records yet.");
   }
 
-  saveState(state);
+  // Count only checks that successfully fetched and processed the drop feed.
+  await sendRunCompletion(state);
 }
 
 main().catch(error => {
