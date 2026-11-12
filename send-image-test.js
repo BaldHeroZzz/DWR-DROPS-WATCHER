@@ -8,14 +8,16 @@ if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
   throw new Error("Missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID secrets.");
 }
 
-// Same Gildenscale image, four rarity markers, to verify the rarity-color mapping.
+// Same item and sample stats; only the rarity circle changes in this test.
 const tests = [
-  ["⚪", "COMMON / GRAY"],
-  ["🟢", "UNCOMMON / GREEN"],
-  ["🔵", "RARE / BLUE"],
-  ["🟣", "EPIC / PURPLE"]
+  ["⚪", "GRAY"],
+  ["🟢", "GREEN"],
+  ["🔵", "BLUE"],
+  ["🟣", "PURPLE"]
 ];
 const imagePath = "images/gildenscale/mage-armor.png";
+const itemName = "Gildenscale Mage Armor";
+const powerLine = "Power : 14.5 (100%)";
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 async function telegram(method, body) {
@@ -32,7 +34,7 @@ async function telegram(method, body) {
   return result;
 }
 
-async function sendPhoto(marker, rarity, index) {
+async function sendPhoto(index) {
   const bytes = await fs.readFile(path.resolve(imagePath));
   const form = new FormData();
   form.append("chat_id", TELEGRAM_CHAT_ID);
@@ -47,25 +49,24 @@ async function sendPhoto(marker, rarity, index) {
   if (!response.ok || !result.ok) {
     throw new Error(result.description || `Telegram photo ${index} failed with HTTP ${response.status}`);
   }
-  console.log(`Sent Gildenscale image for ${rarity}.`);
 }
 
 async function main() {
   for (let i = 0; i < tests.length; i++) {
     const [marker, rarity] = tests[i];
-    // Separate text first, then photo, so the label visibly sits above its image.
+    // Send the requested two-line label first, then the transparent item image.
     await telegram("sendMessage", {
       chat_id: TELEGRAM_CHAT_ID,
-      text: `${marker} <b>GILDENSCALE — ${rarity}</b>`,
+      text: `${marker} <b>${itemName}</b> ${marker}\nPower : <b>14.5 (100%)</b>`,
       parse_mode: "HTML",
       disable_web_page_preview: true
     });
     await sleep(350);
-    await sendPhoto(marker, rarity, i + 1);
-    console.log(`Completed rarity test ${i + 1}/${tests.length}: ${rarity}`);
+    await sendPhoto(i + 1);
+    console.log(`Sent ${i + 1}/${tests.length}: ${rarity}`);
     if (i < tests.length - 1) await sleep(900);
   }
-  console.log("Gildenscale rarity test complete: 4 labeled photos sent individually.");
+  console.log("Gildenscale format test complete: gray, green, blue, purple.");
 }
 
 main().catch(error => {
