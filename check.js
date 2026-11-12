@@ -169,6 +169,74 @@ async function sendTelegramMessage(message) {
   }
 }
 
+function getItemImagePath(item) {
+  const name = String(item.name || "").toLowerCase();
+  const base = path.join(__dirname, "images");
+
+  if (name.includes("lumenflame") && name.includes("absolution")) {
+    return path.join(base, "ultimate", "lumenflames-absolution.png");
+  }
+  if (name.includes("lumenflame") && name.includes("judgement")) {
+    return path.join(base, "ultimate", "lumenflames-judgement.png");
+  }
+  if (name.includes("enhanced inner focus")) {
+    return path.join(base, "legendary", "enhanced-inner-focus.png");
+  }
+  if (name.includes("enhanced inner rage")) {
+    return path.join(base, "legendary", "enhanced-inner-rage.png");
+  }
+  if (name.includes("daybreak") || name.includes("gildensong")) {
+    return path.join(base, "legendary", "mage-legendary-weapons.png");
+  }
+  if (name.includes("gildenscale oath") || name.includes("aegis")) {
+    return path.join(base, "legendary", "warrior-legendary-weapons.png");
+  }
+  if (name.includes("gildenscale")) {
+    const className = name.includes("guarding") ? "guarding"
+      : name.includes("warrior") ? "warrior"
+      : name.includes("mage") ? "mage" : null;
+    if (!className) return null;
+    const slot = name.includes("helmet") ? "helmet"
+      : name.includes("armor") ? "armor" : null;
+    if (!slot) return null;
+    return path.join(base, "gildenscale", `${className}-${slot}.png`);
+  }
+  return null;
+}
+
+async function sendTelegramPhoto(photoPath) {
+  if (!photoPath || !fs.existsSync(photoPath)) {
+    console.log(`No matching image file found for: ${photoPath || "unmapped item"}`);
+    return;
+  }
+
+  const form = new FormData();
+  form.append("chat_id", TELEGRAM_CHAT_ID);
+  form.append("photo", new Blob([fs.readFileSync(photoPath)]), path.basename(photoPath));
+
+  const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`, {
+    method: "POST",
+    body: form,
+    signal: AbortSignal.timeout(30000)
+  });
+  const result = await response.json();
+  if (!response.ok || !result.ok) {
+    throw new Error(result.description || `Telegram photo upload returned HTTP ${response.status}`);
+  }
+  console.log(`Telegram item image sent: ${path.basename(photoPath)}`);
+}
+
+async function sendDropImages(drop) {
+  const items = combineDuplicateItems((Array.isArray(drop.items) ? drop.items : []).filter(isWantedItem));
+  const sent = new Set();
+  for (const item of items) {
+    const imagePath = getItemImagePath(item);
+    if (!imagePath || sent.has(imagePath)) continue;
+    await sendTelegramPhoto(imagePath);
+    sent.add(imagePath);
+  }
+}
+
 async function sendRunCompletion(state) {
   const nextRun = Math.max(0, Number(state.completedRuns) || 0) + 1;
   await sendTelegramMessage(`✅ A (x${nextRun}) run is completed for (${RUN_DURATION_LABEL} duration)`);
@@ -203,7 +271,8 @@ async function main() {
         const message = formatNewDrop(drop);
         if (message) {
           await sendTelegramMessage(message);
-          console.log(`Telegram filtered drop notification sent: ${dropId}`);
+          await sendDropImages(drop);
+          console.log(`Telegram filtered drop notification and matching images sent: ${dropId}`);
         } else {
           console.log(`No Gildenscale, Legendary, or Ultimate items in drop: ${dropId}`);
         }
