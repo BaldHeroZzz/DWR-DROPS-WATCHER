@@ -1,3 +1,6 @@
+const fs = require("node:fs/promises");
+const path = require("node:path");
+
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
@@ -5,46 +8,50 @@ if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
   throw new Error("Missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID secrets.");
 }
 
-const base = "https://raw.githubusercontent.com/BaldHeroZzz/DWR-DROPS-WATCHER/main/images";
 const images = [
-  ["gildenscale/mage-armor.png", "🔵 Gildenscale Mage Armor"],
-  ["gildenscale/mage-helmet.png", "🔵 Gildenscale Mage Helmet"],
-  ["gildenscale/warrior-armor.png", "🔴 Gildenscale Warrior Armor"],
-  ["gildenscale/warrior-helmet.png", "🔴 Gildenscale Warrior Helmet"],
-  ["gildenscale/guarding-armor.png", "🟢 Gildenscale Guarding Armor"],
-  ["gildenscale/guarding-helmet.png", "🟢 Gildenscale Guarding Helmet"],
-  ["legendary/mage-legendary-weapons.png", "🟡 Mage Legendary Weapons"],
-  ["legendary/warrior-legendary-weapons.png", "🟡 Warrior Legendary Weapons"],
-  ["legendary/enhanced-inner-focus.png", "🟡 Enhanced Inner Focus"],
-  ["legendary/enhanced-inner-rage.png", "🟡 Enhanced Inner Rage"],
-  ["ultimate/lumenflames-absolution.png", "🔴 Ultimate — Lumenflame's Absolution (Mage)"],
-  ["ultimate/lumenflames-judgement.png", "🔴 Ultimate — Lumenflame's Judgement (Warrior)"]
+  ["images/gildenscale/mage-armor.png", "🔵", "GILDENSCALE MAGE ARMOR"],
+  ["images/gildenscale/mage-helmet.png", "🔵", "GILDENSCALE MAGE HELMET"],
+  ["images/gildenscale/warrior-armor.png", "🔴", "GILDENSCALE WARRIOR ARMOR"],
+  ["images/gildenscale/warrior-helmet.png", "🔴", "GILDENSCALE WARRIOR HELMET"],
+  ["images/gildenscale/guarding-armor.png", "🟢", "GILDENSCALE GUARDING ARMOR"],
+  ["images/gildenscale/guarding-helmet.png", "🟢", "GILDENSCALE GUARDING HELMET"],
+  ["images/legendary/mage-legendary-weapons.png", "🟡", "MAGE LEGENDARY WEAPONS"],
+  ["images/legendary/warrior-legendary-weapons.png", "🟡", "WARRIOR LEGENDARY WEAPONS"],
+  ["images/legendary/enhanced-inner-focus.png", "🟡", "ENHANCED INNER FOCUS"],
+  ["images/legendary/enhanced-inner-rage.png", "🟡", "ENHANCED INNER RAGE"],
+  ["images/ultimate/lumenflames-absolution.png", "🔴", "ULTIMATE — LUMENFLAME'S ABSOLUTION (MAGE)"],
+  ["images/ultimate/lumenflames-judgement.png", "🔴", "ULTIMATE — LUMENFLAME'S JUDGEMENT (WARRIOR)"]
 ];
 
-async function sendGroup(group, index) {
-  const media = group.map(([file, caption]) => ({
-    type: "photo",
-    media: `${base}/${file}`,
-    caption
-  }));
-  const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMediaGroup`, {
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+async function sendPhoto(file, marker, title, index) {
+  const bytes = await fs.readFile(path.resolve(file));
+  const form = new FormData();
+  form.append("chat_id", TELEGRAM_CHAT_ID);
+  form.append("parse_mode", "HTML");
+  form.append("caption", `${marker} <b>${title}</b>`);
+  form.append("photo", new Blob([bytes], { type: "image/png" }), path.basename(file));
+
+  const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, media }),
+    body: form,
     signal: AbortSignal.timeout(60000)
   });
   const result = await response.json();
   if (!response.ok || !result.ok) {
-    throw new Error(result.description || `Telegram image group ${index} failed with HTTP ${response.status}`);
+    throw new Error(result.description || `Telegram photo ${index} failed with HTTP ${response.status}`);
   }
-  console.log(`Sent image group ${index} (${group.length} images).`);
+  console.log(`Sent ${index}/${images.length}: ${title}`);
 }
 
 async function main() {
-  for (let i = 0; i < images.length; i += 10) {
-    await sendGroup(images.slice(i, i + 10), Math.floor(i / 10) + 1);
+  for (let i = 0; i < images.length; i++) {
+    const [file, marker, title] = images[i];
+    await sendPhoto(file, marker, title, i + 1);
+    if (i < images.length - 1) await sleep(900);
   }
-  console.log(`Image test complete: sent ${images.length} images.`);
+  console.log(`Image test complete: sent ${images.length} photos individually.`);
 }
 
 main().catch(error => {
