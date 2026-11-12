@@ -17,11 +17,11 @@ The counter increments once after the feed has been fetched and processed succes
 ## Drop notifications
 
 Only these items are sent to Telegram:
-- Gildenscale items (purple 🟣)
+- Gildenscale items, preserving the original Discord drop color (gray ⚪, green 🟢, blue 🔵, or purple 🟣)
 - Legendary items (yellow 🟡)
 - Ultimate items (red 🔴)
 
-All other items are ignored. If a drop contains multiple matching items, identical item names and rarities are combined into one quantity line. Drop messages include the drop timestamp in Philippine Time (PHT). Legendary and Ultimate lines are bold.
+All other items are ignored. If a drop contains multiple matching items, identical item names and rarities are combined into one quantity line. Drop messages include the drop timestamp in Philippine Time (PHT), plus each item's Power/Potential and percentage when those values are present in the Discord record. Gildenscale color emojis are read from the original Discord message instead of being inferred from rarity. Legendary and Ultimate lines are bold.
 
 The first successful run establishes the current latest drop as a baseline and does not replay historical drops.
 
