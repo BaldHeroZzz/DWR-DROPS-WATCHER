@@ -160,6 +160,34 @@ function toWellFormedUnicode(value) {
   return output;
 }
 
+let rayxFirebaseApp = null;
+
+async function sendRayXPush(message) {
+  const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+  if (!serviceAccountJson) return;
+  try {
+    const admin = require("firebase-admin");
+    if (!rayxFirebaseApp) {
+      const serviceAccount = JSON.parse(serviceAccountJson);
+      rayxFirebaseApp = admin.apps.length ? admin.app()
+        : admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
+    }
+    const plainText = String(message).replace(/<[^>]*>/g, "").trim();
+    const lines = plainText.split(/\r?\n/).filter(Boolean);
+    const title = lines[0] || "RayX notification";
+    const body = lines.slice(1).join(" ").trim() || title;
+    await rayxFirebaseApp.messaging().send({
+      topic: process.env.RAYX_FCM_TOPIC || "rayx-drops",
+      notification: { title, body },
+      android: { priority: "high", notification: { channelId: "rayx_drops", sound: "default" } },
+      data: { source: "dwr-drops-watcher", message: plainText }
+    });
+    console.log("RayX push notification sent.");
+  } catch (error) {
+    console.error("RayX push failed (Telegram delivery is unaffected):", error.message);
+  }
+}
+
 async function sendTelegramMessage(message) {
   const safeMessage = toWellFormedUnicode(message);
   const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
@@ -177,7 +205,7 @@ async function sendTelegramMessage(message) {
   if (!response.ok || !result.ok) {
     throw new Error(result.description || `Telegram returned HTTP ${response.status}`);
   }
-}
+  await sendRayXPush(safeMessage);\n}
 
 function getItemImagePath(item) {
   const name = String(item.name || "").toLowerCase();
