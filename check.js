@@ -1,4 +1,5 @@
 const fs = require("node:fs");
+const crypto = require("node:crypto");
 const path = require("node:path");
 
 const DROP_API_URL = process.env.DROP_API_URL || "https://baldhero-loots.onrender.com/api/drops";
@@ -243,6 +244,101 @@ async function sendRunCompletion(dungeonCount) {
   console.log(`Telegram dungeon-completion notification sent: x${count}`);
 }
 
+
+let firebaseAccessToken = null;
+let firebaseTokenExpiry = 0;
+
+function getFirebaseServiceAccount() {
+  const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+  if (!raw) throw new Error("Missing FIREBASE_SERVICE_ACCOUNT_JSON GitHub Actions secret.");
+  const account = JSON.parse(raw);
+  if (!account.project_id || !account.client_email || !account.private_key) {
+    throw new Error("Firebase service-account JSON is missing project_id, client_email, or private_key.");
+  }
+  return account;
+}
+
+async function getFirebaseAccessToken(account) {
+  if (firebaseAccessToken && Date.now() < firebaseTokenExpiry - 60000) return firebaseAccessToken;
+
+  const now = Math.floor(Date.now() / 1000);
+  const encode = value => Buffer.from(JSON.stringify(value)).toString("base64url");
+  const unsigned = encode({ alg: "RS256", typ: "JWT" }) + "." + encode({
+    iss: account.client_email,
+    scope: "https://www.googleapis.com/auth/firebase.messaging",
+    aud: account.token_uri || "https://oauth2.googleapis.com/token",
+    iat: now,
+    exp: now + 3600
+  });
+  const signature = crypto.sign("RSA-SHA256", Buffer.from(unsigned), account.private_key).toString("base64url");
+  const assertion = unsigned + "." + signature;
+
+  const response = await fetch(account.token_uri || "https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+      assertion
+    }),
+    signal: AbortSignal.timeout(20000)
+  });
+  const result = await response.json();
+  if (!response.ok || !result.access_token) {
+    throw new Error(result.error_description || result.error || ("Google OAuth returned HTTP " + response.status));
+  }
+  firebaseAccessToken = result.access_token;
+  firebaseTokenExpiry = Date.now() + Number(result.expires_in || 3600) * 1000;
+  return firebaseAccessToken;
+}
+
+async function sendFirebaseNotification(item, drop) {
+  const account = getFirebaseServiceAccount();
+  const token = await getFirebaseAccessToken(account);
+  const itemName = String(item.name || "Unknown item");
+  const rarity = String(item.rarity || "Drop");
+  const power = String(item.potential || "").trim();
+  const dungeon = String(drop.dungeon || "Unknown dungeon");
+  const title = "New " + rarity + " drop!";
+  const body = power
+    ? itemName + " • Power: " + power + " • " + dungeon
+    : itemName + " • " + dungeon;
+  const data = {
+    type: "drop",
+    itemName,
+    rarity,
+    power,
+    percent: item.percent == null ? "" : String(item.percent),
+    quantity: String(Number(item.quantity) > 0 ? Number(item.quantity) : 1),
+    dungeon,
+    dropId: getDropId(drop),
+    timestamp: String(drop.timestamp || ""),
+    author: String(drop.author || "")
+  };
+
+  const response = await fetch(
+    "https://fcm.googleapis.com/v1/projects/" + encodeURIComponent(account.project_id) + "/messages:send",
+    {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer " + token,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        message: {
+          topic: "notifier-drops",
+          notification: { title, body },
+          data,
+          android: { priority: "HIGH" }
+        }
+      }),
+      signal: AbortSignal.timeout(20000)
+    }
+  );
+  const result = await response.json();
+  if (!response.ok) throw new Error((result.error && result.error.message) || ("Firebase FCM returned HTTP " + response.status));
+  console.log("Firebase notification sent for " + itemName + ": " + (result.name || "accepted"));
+}
+
 async function main() {
   const drops = await getDrops();
   const state = loadState();
@@ -272,6 +368,11 @@ async function main() {
         if (items.length) {
           for (const item of items) {
             await sendTelegramMessage(formatDropItem(item, drop));
+            try {
+              await sendFirebaseNotification(item, drop);
+            } catch (error) {
+              console.error("Firebase notification failed (Telegram alert was still sent):", error);
+            }
             await sendTelegramPhoto(getItemImagePath(item));
           }
           console.log(`Telegram item notifications and matching images sent: ${dropId}`);
