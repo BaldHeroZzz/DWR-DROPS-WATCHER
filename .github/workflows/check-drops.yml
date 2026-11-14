@@ -27,6 +27,9 @@ jobs:
         with:
           node-version: "20"
 
+      - name: Install notification dependencies
+        run: npm install --omit=dev
+
       - name: Validate watcher syntax
         run: node --check check.js
 
