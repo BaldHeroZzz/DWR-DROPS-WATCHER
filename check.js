@@ -1,3 +1,4 @@
+const { runTelegramFeatures } = require("./telegram-features");
 const fs = require("node:fs");
 const crypto = require("node:crypto");
 const path = require("node:path");
@@ -388,6 +389,13 @@ async function main() {
   }
 
   await sendRunCompletion(completedDungeons);
+  await runTelegramFeatures({
+    drops,
+    state,
+    saveState,
+    token: TELEGRAM_BOT_TOKEN,
+    chatId: TELEGRAM_CHAT_ID
+  });
 }
 
 main().catch(error => {
