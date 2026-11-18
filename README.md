@@ -13,7 +13,7 @@ After each successful check, Telegram receives a separate completion message wit
 ✅ A (x2) run is completed for (5 minutes duration)
 ```
 
-The counter increments only after Telegram accepts the completion message. The watcher does not send the old inactivity/no-drop alerts.
+The counter increments only after Telegram accepts the completion message. The watcher also sends a five-minute activity report, a 10-minute no-drop warning (once per quiet period), and a daily loot summary at midnight Philippines time.
 
 ## Drop notifications
 
@@ -45,3 +45,7 @@ The workflow needs **Settings → Actions → General → Workflow permissions �
 | `TELEGRAM_BOT_TOKEN` | Required Telegram bot token |
 | `TELEGRAM_CHAT_ID` | Required Telegram destination chat ID |
 | `DROP_API_URL` | Optional feed URL; defaults to the BaldHero feed |
+
+## Telegram dashboard features
+
+The scheduled GitHub Actions run also sends a five-minute activity report with dungeon records and rarity totals, warns once when the feed has been quiet for 10 minutes, and sends the previous day's loot summary at midnight PHT. Telegram commands are supported in the configured destination chat: `/stats`, `/drops`, `/history`, `/top`, and `/help`. Telegram update offsets, report timestamps, and alert state are stored in `data/state.json` by the existing workflow commit step. The existing `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` secrets are reused; no Render environment-variable setup or additional secrets are required.
