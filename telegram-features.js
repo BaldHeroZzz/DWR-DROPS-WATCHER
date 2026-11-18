@@ -50,7 +50,8 @@ async function runTelegramFeatures({drops,state,saveState,token,chatId}){
   const lastReport=Number(state.telegramReportAt||now-5*60*1000);
   const recentDrops=drops.filter(d=>{const t=Date.parse(d.timestamp||"");return Number.isFinite(t)&&t>lastReport&&t<=now;});
   const recentItems=flatten(recentDrops);const totals=summarize(recentItems);
-  const windowLabel=reportDateTime(lastReport,true)+" – "+reportDateTime(now,false)+" PHT";\n  await send("━━━━━━━━━━━━━━━━━━━━ ⚔️ <b>𝐁𝐀𝐋𝐃𝐇𝐄𝐑𝐎 𝐑𝐀𝐑𝐄 𝐃𝐑𝐎𝐏𝐒</b> ━━━━━━━━━━━━━━━━━━━━\n\n📅 "+esc(windowLabel)+"\n\n"+activityHighlights(recentItems)+"\n\n━━━━━━━━━━━━━━━━━━━━ "+smallCaps("END OF REPORT")+" ━━━━━━━━━━━━━━━━━━━━");
+  const windowLabel=reportDateTime(lastReport,true)+" – "+reportDateTime(now,false)+" PHT";
+  await send("━━━━━━━━━━━━━━━━━━━━ ⚔️ <b>𝐁𝐀𝐋𝐃𝐇𝐄𝐑𝐎 𝐑𝐀𝐑𝐄 𝐃𝐑𝐎𝐏𝐒</b> ━━━━━━━━━━━━━━━━━━━━\n\n📅 "+esc(windowLabel)+"\n\n"+activityHighlights(recentItems)+"\n\n━━━━━━━━━━━━━━━━━━━━ "+smallCaps("END OF REPORT")+" ━━━━━━━━━━━━━━━━━━━━");
   state.telegramReportAt=now;
   const latest=drops[0]||null;
   if(latest){const latestId=String(latest.id||latest.timestamp||"");const latestAt=Date.parse(latest.timestamp||"");if(Number.isFinite(latestAt)&&now-latestAt>=10*60*1000&&state.noDropAlertedFor!==latestId){await send("🚨 <b>BALDHERO DROP ACTIVITY WARNING</b>\n\nNo new drops have been detected for <b>10 minutes</b>.\n🕒 Last drop: <b>"+esc(stamp(latest.timestamp))+"</b>\n⏱️ Quiet period: <b>"+Math.floor((now-latestAt)/60000)+" minutes</b>\n\nThe watcher is still monitoring.");state.noDropAlertedFor=latestId;}else if(latestId!==state.noDropAlertedFor){state.noDropAlertedFor=null;}}
