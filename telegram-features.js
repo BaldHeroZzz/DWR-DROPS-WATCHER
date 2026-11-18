@@ -7,6 +7,32 @@ const highValue = item => isGild(item) || ["ultimate","legendary"].includes(Stri
 const quantity = item => Math.max(1,Number(item.quantity)||1);
 function summarize(items){const c={total:0,ultimate:0,legendary:0,gildenscale:0,epic:0,rare:0,uncommon:0,common:0};for(const i of items){const q=quantity(i);c.total+=q;if(isGild(i))c.gildenscale+=q;else{const r=String(i.rarity||"common").toLowerCase();if(Object.prototype.hasOwnProperty.call(c,r))c[r]+=q;}}return c;}
 function emoji(item){const r=String(item.rarity||"").toLowerCase();if(r==="ultimate")return "🔴";if(r==="legendary")return "🟡";if(isGild(item)){const n=String(item.name||"").toLowerCase();return n.includes("mage")?"🔵":n.includes("warrior")?"🔴":n.includes("guardian")?"🟢":"🟣";}return ({epic:"🟣",rare:"🔵",uncommon:"🟢",common:"⚪"})[r]||"📦";}
+function smallCaps(value){
+  const map={a:"ᴀ",b:"ʙ",c:"ᴄ",d:"ᴅ",e:"ᴇ",f:"ғ",g:"ɢ",h:"ʜ",i:"ɪ",j:"ᴊ",k:"ᴋ",l:"ʟ",m:"ᴍ",n:"ɴ",o:"ᴏ",p:"ᴘ",q:"ǫ",r:"ʀ",s:"s",t:"ᴛ",u:"ᴜ",v:"ᴠ",w:"ᴡ",x:"x",y:"ʏ",z:"ᴢ"};
+  return [...String(value)].map(ch=>map[ch.toLowerCase()]||ch).join("");
+}
+function timeOnly(value){return new Intl.DateTimeFormat("en-PH",{timeZone:PHT,hour:"numeric",minute:"2-digit"}).format(new Date(value||Date.now()));}
+function gildenscaleColor(item){
+  const drop=item.drop||{};
+  const name=String(item.name||"").trim();
+  const raw=String(drop.rawText||"");
+  const index=raw.toLowerCase().indexOf(name.toLowerCase());
+  if(index>=0){const prefix=raw.slice(0,index).match(/([⚪🔵🟢🟣🟡🔴])\\s*$/);if(prefix)return prefix[1];}
+  const n=name.toLowerCase();
+  return n.includes("mage")?"🔵":n.includes("warrior")?"🔴":n.includes("guardian")||n.includes("guarding")?"🟢":"🟣";
+}
+function activityHighlights(items){
+  const section=(label,rows)=>"("+smallCaps(label)+")\\n"+(rows.length?rows.map(x=>smallCaps((quantity(x)>1?"x"+quantity(x)+" ":"")+x.name+" dropped at time ("+timeOnly(x.drop.timestamp)+")")).join("\\n"):smallCaps("none"));
+  const ult=items.filter(x=>["ultimate","ultra"].includes(String(x.rarity||"").toLowerCase()));
+  const leg=items.filter(x=>["legendary","legend"].includes(String(x.rarity||"").toLowerCase()));
+  const gild=items.filter(isGild);
+  const colors=["🟣","🔵","🟢","⚪"];
+  const counts=new Map(colors.map(color=>[color,0]));
+  for(const item of gild){const color=gildenscaleColor(item);counts.set(color,(counts.get(color)||0)+quantity(item));}
+  const extra=[...counts.keys()].filter(color=>!colors.includes(color)&&counts.get(color)>0);
+  const gildLines=[...colors,...extra].map(color=>color+" : "+(counts.get(color)||0)).join("\\n");
+  return [section("ULTIMATES",ult),section("LEGENDARIES",leg),"("+smallCaps("GILDENSCALES")+")\\n"+(gild.length?gildLines:smallCaps("none"))].join("\\n\\n");
+}
 function flatten(drops){return drops.flatMap(drop=>(Array.isArray(drop.items)?drop.items:[]).map(item=>({...item,drop})));}
 async function runTelegramFeatures({drops,state,saveState,token,chatId}){
   async function api(method,payload){const response=await fetch("https://api.telegram.org/bot"+token+"/"+method,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(payload),signal:AbortSignal.timeout(15000)});const result=await response.json();if(!response.ok||!result.ok)throw new Error(result.description||"Telegram API error");return result.result;}
@@ -15,7 +41,7 @@ async function runTelegramFeatures({drops,state,saveState,token,chatId}){
   const lastReport=Number(state.telegramReportAt||now-5*60*1000);
   const recentDrops=drops.filter(d=>{const t=Date.parse(d.timestamp||"");return Number.isFinite(t)&&t>lastReport&&t<=now;});
   const recentItems=flatten(recentDrops);const totals=summarize(recentItems);
-  await send("📊 <b>BALDHERO ACTIVITY REPORT</b>\n<i>"+esc(stamp(lastReport))+" – "+esc(stamp(now))+" PHT</i>\n\n🏰 Dungeon records: <b>"+recentDrops.length+"</b>\n📦 Total drops: <b>"+totals.total+"</b>\n💎 Rare drops: <b>"+(totals.ultimate+totals.legendary+totals.gildenscale)+"</b>\n\n🔴 Ultimate: "+totals.ultimate+"\n🟡 Legendary: "+totals.legendary+"\n🟣 Gildenscale: "+totals.gildenscale+"\n🟣 Epic: "+totals.epic+"\n🔵 Rare: "+totals.rare+"\n🟢 Uncommon: "+totals.uncommon+"\n⚪ Common: "+totals.common);
+  await send("📊 <b>BALDHERO ACTIVITY REPORT</b>\n<i>"+esc(stamp(lastReport))+" – "+esc(stamp(now))+" PHT</i>\n\n🏰 Dungeon records: <b>"+recentDrops.length+"</b>\n📦 Total drops: <b>"+totals.total+"</b>\n💎 Rare drops: <b>"+(totals.ultimate+totals.legendary+totals.gildenscale)+"</b>\n\n🔴 Ultimate: "+totals.ultimate+"\n🟡 Legendary: "+totals.legendary+"\n🟣 Gildenscale: "+totals.gildenscale+"\n🟣 Epic: "+totals.epic+"\n🔵 Rare: "+totals.rare+"\n🟢 Uncommon: "+totals.uncommon+"\n⚪ Common: "+totals.common+ "\n\n" + esc(activityHighlights(recentItems)));
   state.telegramReportAt=now;
   const latest=drops[0]||null;
   if(latest){const latestId=String(latest.id||latest.timestamp||"");const latestAt=Date.parse(latest.timestamp||"");if(Number.isFinite(latestAt)&&now-latestAt>=10*60*1000&&state.noDropAlertedFor!==latestId){await send("🚨 <b>BALDHERO DROP ACTIVITY WARNING</b>\n\nNo new drops have been detected for <b>10 minutes</b>.\n🕒 Last drop: <b>"+esc(stamp(latest.timestamp))+"</b>\n⏱️ Quiet period: <b>"+Math.floor((now-latestAt)/60000)+" minutes</b>\n\nThe watcher is still monitoring.");state.noDropAlertedFor=latestId;}else if(latestId!==state.noDropAlertedFor){state.noDropAlertedFor=null;}}
