@@ -17,12 +17,12 @@ function gildenscaleColor(item){
   const name=String(item.name||"").trim();
   const raw=String(drop.rawText||"");
   const index=raw.toLowerCase().indexOf(name.toLowerCase());
-  if(index>=0){const prefix=raw.slice(0,index).match(/([⚪🔵🟢🟣🟡🔴])\\s*$/);if(prefix)return prefix[1];}
+  if(index>=0){const prefix=raw.slice(0,index).match(/([⚪🔵🟢🟣🟡🔴])\s*$/);if(prefix)return prefix[1];}
   const n=name.toLowerCase();
   return n.includes("mage")?"🔵":n.includes("warrior")?"🔴":n.includes("guardian")||n.includes("guarding")?"🟢":"🟣";
 }
 function activityHighlights(items){
-  const section=(label,rows)=>"("+smallCaps(label)+")\\n"+(rows.length?rows.map(x=>smallCaps((quantity(x)>1?"x"+quantity(x)+" ":"")+x.name+" dropped at time ("+timeOnly(x.drop.timestamp)+")")).join("\\n"):smallCaps("none"));
+  const section=(label,rows)=>"("+smallCaps(label)+")\n"+(rows.length?rows.map(x=>smallCaps((quantity(x)>1?"x"+quantity(x)+" ":"")+x.name+" dropped at time ("+timeOnly(x.drop.timestamp)+")")).join("\n"):smallCaps("none"));
   const ult=items.filter(x=>["ultimate","ultra"].includes(String(x.rarity||"").toLowerCase()));
   const leg=items.filter(x=>["legendary","legend"].includes(String(x.rarity||"").toLowerCase()));
   const gild=items.filter(isGild);
@@ -30,8 +30,8 @@ function activityHighlights(items){
   const counts=new Map(colors.map(color=>[color,0]));
   for(const item of gild){const color=gildenscaleColor(item);counts.set(color,(counts.get(color)||0)+quantity(item));}
   const extra=[...counts.keys()].filter(color=>!colors.includes(color)&&counts.get(color)>0);
-  const gildLines=[...colors,...extra].map(color=>color+" : "+(counts.get(color)||0)).join("\\n");
-  return [section("ULTIMATES",ult),section("LEGENDARIES",leg),"("+smallCaps("GILDENSCALES")+")\\n"+(gild.length?gildLines:smallCaps("none"))].join("\\n\\n");
+  const gildLines=[...colors,...extra].map(color=>color+" : "+(counts.get(color)||0)).join("\n");
+  return [section("ULTIMATES",ult),section("LEGENDARIES",leg),"("+smallCaps("GILDENSCALES")+")\n"+(gild.length?gildLines:smallCaps("none"))].join("\n\n");
 }
 function flatten(drops){return drops.flatMap(drop=>(Array.isArray(drop.items)?drop.items:[]).map(item=>({...item,drop})));}
 async function runTelegramFeatures({drops,state,saveState,token,chatId}){
