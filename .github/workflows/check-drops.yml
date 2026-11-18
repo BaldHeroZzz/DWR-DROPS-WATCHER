@@ -28,7 +28,9 @@ jobs:
           node-version: "20"
 
       - name: Validate watcher syntax
-        run: node --check check.js
+        run: |
+          node --check check.js
+          node --check telegram-features.js
 
       - name: Check BaldHero feed and send alert if needed
         env:
