@@ -21,17 +21,26 @@ function gildenscaleColor(item){
   const n=name.toLowerCase();
   return n.includes("mage")?"🔵":n.includes("warrior")?"🔴":n.includes("guardian")||n.includes("guarding")?"🟢":"🟣";
 }
+function reportDateTime(value, includeDate=false){
+  const date=new Intl.DateTimeFormat("en-US",{timeZone:PHT,month:"short",day:"numeric",year:"numeric"}).format(new Date(value||Date.now()));
+  const time=new Intl.DateTimeFormat("en-US",{timeZone:PHT,hour:"numeric",minute:"2-digit"}).format(new Date(value||Date.now()));
+  return includeDate?date+" • "+time:time;
+}
 function activityHighlights(items){
-  const section=(label,rows)=>"("+smallCaps(label)+")\n"+(rows.length?rows.map(x=>smallCaps((quantity(x)>1?"x"+quantity(x)+" ":"")+x.name+" dropped at time ("+timeOnly(x.drop.timestamp)+")")).join("\n"):smallCaps("none"));
   const ult=items.filter(x=>["ultimate","ultra"].includes(String(x.rarity||"").toLowerCase()));
   const leg=items.filter(x=>["legendary","legend"].includes(String(x.rarity||"").toLowerCase()));
   const gild=items.filter(isGild);
-  const colors=["🟣","🔵","🟢","⚪"];
-  const counts=new Map(colors.map(color=>[color,0]));
-  for(const item of gild){const color=gildenscaleColor(item);counts.set(color,(counts.get(color)||0)+quantity(item));}
-  const extra=[...counts.keys()].filter(color=>!colors.includes(color)&&counts.get(color)>0);
-  const gildLines=[...colors,...extra].map(color=>color+" : "+(counts.get(color)||0)).join("\n");
-  return [section("ULTIMATES",ult),section("LEGENDARIES",leg),"("+smallCaps("GILDENSCALES")+")\n"+(gild.length?gildLines:smallCaps("none"))].join("\n\n");
+  const rows=list=>list.length?list.map(x=>"└ "+esc((quantity(x)>1?"x"+quantity(x)+" ":"")+x.name)).join("\n"):"└ None";
+  const gildRows=gild.length?gild.map(x=>{
+    const power=String(x.potential||"").trim();
+    const percent=x.percent!==undefined&&x.percent!==null&&x.percent!==""?" ("+Number(x.percent)+"%)":"";
+    const stats=power?" • Power: "+esc(power+percent):(percent?" • Potential: "+esc(percent.trim()):"");
+    const rarity=esc(String(x.rarity||"Gildenscale"));
+    return "└ "+gildenscaleColor(x)+" "+esc((quantity(x)>1?"x"+quantity(x)+" ":"")+x.name)+" • "+rarity+stats;
+  }).join("\n"):"└ None";
+  return "🔴 "+smallCaps("ULTIMATES")+"\n"+rows(ult)+"\n\n"+
+    "🟡 "+smallCaps("LEGENDARIES")+"\n"+rows(leg)+"\n\n"+
+    "⚫ "+smallCaps("GILDENSCALES")+"\n"+gildRows;
 }
 function flatten(drops){return drops.flatMap(drop=>(Array.isArray(drop.items)?drop.items:[]).map(item=>({...item,drop})));}
 async function runTelegramFeatures({drops,state,saveState,token,chatId}){
@@ -41,7 +50,7 @@ async function runTelegramFeatures({drops,state,saveState,token,chatId}){
   const lastReport=Number(state.telegramReportAt||now-5*60*1000);
   const recentDrops=drops.filter(d=>{const t=Date.parse(d.timestamp||"");return Number.isFinite(t)&&t>lastReport&&t<=now;});
   const recentItems=flatten(recentDrops);const totals=summarize(recentItems);
-  await send("📊 <b>BALDHERO ACTIVITY REPORT</b>\n<i>"+esc(stamp(lastReport))+" – "+esc(stamp(now))+" PHT</i>\n\n🏰 Dungeon records: <b>"+recentDrops.length+"</b>\n📦 Total drops: <b>"+totals.total+"</b>\n💎 Rare drops: <b>"+(totals.ultimate+totals.legendary+totals.gildenscale)+"</b>\n\n🔴 Ultimate: "+totals.ultimate+"\n🟡 Legendary: "+totals.legendary+"\n🟣 Gildenscale: "+totals.gildenscale+"\n🟣 Epic: "+totals.epic+"\n🔵 Rare: "+totals.rare+"\n🟢 Uncommon: "+totals.uncommon+"\n⚪ Common: "+totals.common+ "\n\n" + esc(activityHighlights(recentItems)));
+  const windowLabel=reportDateTime(lastReport,true)+" – "+reportDateTime(now,false)+" PHT";\n  await send("━━━━━━━━━━━━━━━━━━━━ ⚔️ <b>𝐁𝐀𝐋𝐃𝐇𝐄𝐑𝐎 𝐑𝐀𝐑𝐄 𝐃𝐑𝐎𝐏𝐒</b> ━━━━━━━━━━━━━━━━━━━━\n\n📅 "+esc(windowLabel)+"\n\n"+activityHighlights(recentItems)+"\n\n━━━━━━━━━━━━━━━━━━━━ "+smallCaps("END OF REPORT")+" ━━━━━━━━━━━━━━━━━━━━");
   state.telegramReportAt=now;
   const latest=drops[0]||null;
   if(latest){const latestId=String(latest.id||latest.timestamp||"");const latestAt=Date.parse(latest.timestamp||"");if(Number.isFinite(latestAt)&&now-latestAt>=10*60*1000&&state.noDropAlertedFor!==latestId){await send("🚨 <b>BALDHERO DROP ACTIVITY WARNING</b>\n\nNo new drops have been detected for <b>10 minutes</b>.\n🕒 Last drop: <b>"+esc(stamp(latest.timestamp))+"</b>\n⏱️ Quiet period: <b>"+Math.floor((now-latestAt)/60000)+" minutes</b>\n\nThe watcher is still monitoring.");state.noDropAlertedFor=latestId;}else if(latestId!==state.noDropAlertedFor){state.noDropAlertedFor=null;}}
