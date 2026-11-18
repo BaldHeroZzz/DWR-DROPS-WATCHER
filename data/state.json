@@ -1,6 +1,9 @@
 {
-  "latestDropId": "1572567885744967762-0",
+  "latestDropId": "1572570576168689768-0",
   "lastDropAt": "2026-11-12T10:23:42.751Z",
   "alertedDropId": null,
-  "completedRuns": 9
+  "completedRuns": 9,
+  "telegramReportAt": 1795000723094,
+  "noDropAlertedFor": null,
+  "telegramUpdateOffset": 317278577
 }
